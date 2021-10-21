@@ -68,25 +68,6 @@ class MyGraphics(Graphics):
 
     def mouse_button_up_handler(self):
         self.prev_pos = None # マウスボタンを離したら、以前の位置をリセット
-
-    def set_tree(self,tree):
-        self.tree = tree 
-
-    def set_nodes(self,nodes):
-        self.nodes = nodes 
-
-    def draw_node(self,node):
-        if(node == None): return
-        
-        if(node.is_leaf()): # BoundingBoxを黒色で描写
-            self.draw_rect(Color.BLACK,node.box.lower,node.box.upper)
-            return
-        else: # AABB木の枝に対応するBoundingBoxを黒色で描写
-            self.draw_rect(Color.BLACK,node.box.lower,node.box.upper)
-
-        # 再帰で下に"下る"
-        self.draw_node(node.left)            
-        self.draw_node(node.right)
                         
     def test_aabb(self,test_node,node,debug=False):
         """
@@ -107,37 +88,50 @@ class MyGraphics(Graphics):
 
             return
 
-         # BoudingBoxと接触している場合、接触している子を再帰的に探す
+         # Bounding Boxと接触している場合、接触している子を再帰的に探す
         if(test_aabb_aabb(test_node.box,node.box)):
             self.test_aabb(test_node,node.left,debug) 
             self.test_aabb(test_node,node.right,debug)
             
         else: # 接触していない場合
             return
+                
+    def collision_test(self):
+        """
+        すべてのオブジェクトに対し衝突判定をして、めり込みを解消する。
+        """        
+        for i in range(len(self.nodes)):
+            self.test_aabb(self.nodes[i],self.tree.root) # Broad phase        
 
     def update_objs(self):
         """
-        オブジェクトを回転させている
+        オブジェクトの位置を更新(重力、回転など)
         """
-        
+
+        """
         angles = [0.01,0.02,0.03,0.04]
         num_angles = len(angles)
+        """
         
         for i in range(len(self.nodes)):
             if(self.nodes[i].body.is_static): continue # 静的オブジェクトは動かさない
             
             grav_mat = Matrix3.Identity()
-            #if(self.nodes[i].body.use_gravity):            
-            #    grav_mat = Matrix3.Translate(0,-0.8)           
+            if(self.nodes[i].body.use_gravity):  # 重力を使用するオブジェクトのみ重力を作用
+                grav_mat = Matrix3.Translate(0,-0.8)
                 
+            """
             k = i%num_angles            
             trans_mat = Matrix3.Translate(-self.nodes[i].body.center.x,-self.nodes[i].body.center.y)
             inv_trans_mat = Matrix3.Translate(self.nodes[i].body.center.x,self.nodes[i].body.center.y)        
             rot_mat = Matrix3.Rotate(angles[k])
-            #mat =  grav_mat*inv_trans_mat*rot_mat*trans_mat
+            mat =  grav_mat*inv_trans_mat*rot_mat*trans_mat
             mat =  grav_mat
             self.nodes[i].body.update(mat)
-            
+            """
+
+            self.nodes[i].body.update(grav_mat)
+
     def update(self):
         self.update_objs() # すべてのオブジェクトを更新(回転、並進など)
                 
@@ -145,6 +139,19 @@ class MyGraphics(Graphics):
             self.tree.reinsert(node)        
         pass
     
+    def draw_node(self,node):
+        if(node == None): return
+        
+        if(node.is_leaf()): # Bounding Boxを黒色で描写
+            self.draw_rect(Color.BLACK,node.box.lower,node.box.upper)
+            return
+        else: # AABB木の枝に対応するBounding Boxを黒色で描写
+            self.draw_rect(Color.BLACK,node.box.lower,node.box.upper)
+
+        # 再帰で下に"下る"
+        self.draw_node(node.left)            
+        self.draw_node(node.right)
+
     def draw_objs(self,color):
         for node in self.nodes:            
             if(isinstance(node.body,Triangle)):
@@ -154,19 +161,12 @@ class MyGraphics(Graphics):
             else:
                 print("ERROR(draw_objs):そのようなオブジェクトは存在しません")
                 exit(-1)
-                
+
     def debug_draw(self):
         if(self.debug):
             self.draw_node(self.tree.root)
             self.test_aabb(self.nodes[self.moving_obj_idx],self.tree.root,self.debug)
-            
-    def collision_test(self):
-        """
-        すべてのオブジェクトに対し衝突判定をして、めり込みを解消する。
-        """        
-        for i in range(len(self.nodes)):
-            self.test_aabb(self.nodes[i],self.tree.root) # Broad phase        
-        
+
     def draw(self):
         self.debug_draw() # デバッグ用
         self.collision_test() # 衝突判定
@@ -188,6 +188,12 @@ class MyGraphics(Graphics):
 
     def turn_off_debug(self):
         self.debug = False
+    
+    def set_tree(self,tree):
+        self.tree = tree 
+
+    def set_nodes(self,nodes):
+        self.nodes = nodes 
 
 def _append_circle_mesh_to_nodes(x,y,radius,num_triangles,mass,nodes):
     delta_ang = 2*math.pi/num_triangles
@@ -231,7 +237,7 @@ def main():
     
     graphics = MyGraphics(640,480)
     graphics.set_window_title("DYNAMIC AABB DEMO")
-    graphics.turn_on_debug()
+    #graphics.turn_on_debug()
     
     graphics.set_tree(tree)
     graphics.set_nodes(nodes)
