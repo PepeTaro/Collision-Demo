@@ -7,6 +7,9 @@ AABB木とSAT(Separating Axis Theorem)アルゴリズムを使用した簡易衝
 ### 使用アルゴリズム
 * Broad Phase時にAABB衝突判定、Narrow Phase時にSAT衝突判定を使用。
 
+### 回転
+![rotation.gif](images/rotation.gif)
+
 ### 衝突判定デモ
 ![mouse_drag.gif](images/mouse_drag.gif)
 

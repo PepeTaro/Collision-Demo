@@ -262,7 +262,7 @@ class MyGraphics(Graphics):
             
             grav_mat = Matrix3.Identity()
             if(self.nodes[i].body.use_gravity):  # 重力を使用するオブジェクトのみ重力を作用
-                grav_mat = Matrix3.Translate(0,-0.2)
+                grav_mat = Matrix3.Translate(0,-0.4)
                 
             """
             k = i%num_angles            
@@ -379,7 +379,7 @@ def main():
     """
     
     #_append_circle_mesh_to_nodes(300,400,20,10,10,nodes)    
-    _append_random_triangle_to_nodes(10,400,100,400,30,20,1,nodes)
+    _append_random_triangle_to_nodes(10,400,100,400,30,30,1,nodes)
     
     t = Triangle(Vector2(20,100),Vector2(320,40),Vector2(600,100),100000)
     t.use_gravity = False
