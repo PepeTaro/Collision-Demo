@@ -52,6 +52,9 @@ class Vector2:
         
         return Vector2(x,y)
 
+    def __neg__(self):
+        return Vector2(-self.x,-self.y)
+    
     def __eq__(self,vec):
         if(vec == None): return False
         elif(self.x == vec.x or self.y == vec.y): return True
