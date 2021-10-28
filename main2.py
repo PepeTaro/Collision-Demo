@@ -1,0 +1,267 @@
+from graphics import *
+from vector2 import Vector2
+from matrix3 import Matrix3
+from color import Color
+import clip
+
+from force import *
+from rigid import *
+
+import random
+import math
+
+def sign(p1,p2,p3):
+    return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y)
+
+def point_in_triangle(pt,t):
+    d1 = sign(pt,t.vecs[0],t.vecs[1])
+    d2 = sign(pt,t.vecs[1],t.vecs[2])
+    d3 = sign(pt,t.vecs[2],t.vecs[0])
+    
+    has_neg = (d1 < 0) or (d2 < 0) or (d3 < 0);
+    has_pos = (d1 > 0) or (d2 > 0) or (d3 > 0);
+    
+    return not(has_neg and has_pos);
+
+class MyGraphics(Graphics):
+    def __init__(self,width,height):
+        super().__init__(width,height)
+        self.triangles = []
+        self.forces    = []
+        self.elapsed_time = 0.0
+        self.prev_pos = None
+        self.delta = None
+        self.debug = False
+        
+    def event_handler(self,event):
+        if event.type == QUIT:
+            self._quit_handler()
+            
+        elif event.type == KEYUP:
+            self._keyboard_up_handler()
+                
+        elif event.type == KEYDOWN:
+            self._keyboard_down_handler(event.key)
+                
+        elif event.type == MOUSEBUTTONDOWN:
+            self._mouse_button_down_handler()
+            
+        elif event.type == MOUSEBUTTONUP:
+            self._mouse_button_up_handler()
+
+    def keyboard_down_handler(self,key):        
+        if key == K_q:
+            self.running = False
+
+    def holding_key_handler(self):
+        if(not self.is_holding_key): return
+        delta_angle = 2.0
+        # 左右アローキーで、マウスで動かすオブジェクトを変更
+        if self.holding_which_key == K_LEFT:
+            self.triangles[1].add_torque(delta_angle)
+            pass            
+        elif self.holding_which_key == K_RIGHT:
+            self.triangles[1].add_torque(-delta_angle)
+            pass            
+        elif self.holding_which_key == K_UP:
+            self.debug = True
+            pass            
+        elif self.holding_which_key == K_DOWN:
+            self.debug = False
+            pass
+        
+    def holding_mouse_handler(self):
+        if(not self.is_holding_mouse_button): return
+        # マウスの現在の位置を取得し、以前の状態がないなら上書き
+        pos = self.mouse_get_pos()        
+        if(self.prev_pos == None): self.prev_pos = pos
+        # 以前のマウスの位置と現在のマウスの位置の"差"を求め、そのベクトル分オブジェクトを動かく
+        self.delta = (pos - self.prev_pos)
+        
+        mat = Matrix3.Translate(self.delta.x,self.delta.y)
+        self.triangles[1].transform(mat,True)
+                
+        self.prev_pos = pos # 以前の位置を更新
+        
+    def mouse_button_up_handler(self):
+        self.prev_pos = None # マウスボタンを離したら、以前の位置をリセット
+
+    def collision_test(self,t1,t2):        
+        (depth,normal,is_t2_incident) = clip.sat(t1,t2)
+        
+        cp = None
+        data = []        
+        if(normal != None):
+            cp = clip.get_contact_points(t1,t2,normal,data)            
+            if(cp != None and is_t2_incident):
+                
+                if(self.debug):
+                    self.draw_line(Color.GREEN,data[0].begin,data[0].end,5)
+                    self.draw_line(Color.BLUE,data[1].begin,data[1].end,5)
+                
+                #mat = Matrix3.Translate(-depth*weight*normal.x,-depth*weight*normal.y)
+                #t1.transform(mat,True)
+                
+                weight1 = t2.mass/(t1.mass + t2.mass)
+                weight2 = t1.mass/(t1.mass + t2.mass)
+                mat1 = Matrix3.Translate(-depth*weight1*normal.x,-depth*weight1*normal.y)
+                mat2 = Matrix3.Translate(depth*weight2*normal.x,depth*weight2*normal.y)                    
+                t1.transform(mat1,True)
+                t2.transform(mat2,True)
+                    
+                if(cp.begin != None):
+                    #t1.add_force_at_point(cp.begin,-normal*weight*depth*0.01)
+                    t1.add_force_at_point(cp.begin,-normal*weight1*depth*0.01)
+                    t2.add_force_at_point(cp.begin,normal*weight2*depth*0.01)
+
+                    if(self.debug):
+                        self.draw_circle(Color.RED,cp.begin,5)
+                        self.draw_line(Color.YELLOW,t1.center,cp.begin,3)
+                        self.draw_line(Color.CYAN,t1.center,t1.center - normal*30,3)
+                        self.draw_line(Color.CYAN,cp.begin,cp.begin - normal*30,3)
+                        self.draw_circle(Color.MAGENTA,t1.center,5)
+                    
+                if(cp.end != None):
+                    #t1.add_force_at_point(cp.end,-normal*weight*depth*0.01)
+                    t1.add_force_at_point(cp.end,-normal*weight1*depth*0.01)
+                    t2.add_force_at_point(cp.end,normal*weight2*depth*0.01)
+
+                    if(self.debug):
+                        self.draw_circle(Color.RED,cp.end,5)
+                        self.draw_line(Color.YELLOW,t1.center,cp.end,3)
+                        self.draw_line(Color.CYAN,t1.center,t1.center - normal*30,3)
+                        self.draw_line(Color.CYAN,cp.end,cp.end - normal*30,3)                    
+                        self.draw_circle(Color.MAGENTA,t1.center,5)
+                    
+    def update(self):
+        delta = 0.1
+        for force in self.forces:
+            for obj in force.objs:
+                force.update_force(obj,delta)
+                obj.update(delta)
+
+        for t1 in self.triangles:
+            for t2 in self.triangles:                
+                if(t1 == t2): continue
+                self.collision_test(t1,t2)
+        
+    def draw_debug(self,t):
+        self.draw_circle(Color.MAGENTA,t.center,2)
+        self.draw_rect(Color.RED,t.aabb.lower,t.aabb.upper)
+
+        for i in range(3):
+            half = (t.vecs[i%3] + t.vecs[(i+1)%3])/2
+            self.draw_line(Color.BLACK,half,half + t.normals[i]*10)
+
+    def draw(self):
+        if(self.prev_pos != None):
+            self.draw_circle(Color.RED,self.prev_pos,4)
+            self.draw_line(Color.RED,self.prev_pos,self.prev_pos + self.delta*10,4)
+            if(point_in_triangle(self.prev_pos,self.triangles[0])):
+                pass
+                #mat = Matrix3.Translate(self.delta.x,self.delta.y)
+                #self.triangles[0].transform(mat,True)
+                
+        for t in self.triangles:
+            self.draw_triangle(Color.BLACK,t)
+            if(self.debug): self.draw_debug(t)
+            
+    def draw_triangle(self,color,triangle,width=1):
+        super().draw_triangle(color,triangle.vecs[0],triangle.vecs[1],triangle.vecs[2],width)
+
+    def append_triangle(self,t):
+        self.triangles.append(t)
+        return len(self.triangles) - 1
+
+    def append_force(self,force):
+        self.forces.append(force)
+        return len(self.forces) - 1
+
+    def timer(self):
+        pass
+        #self.clock.tick()
+        #fps = self.clock.get_fps()
+        #if(fps != 0): self.elapsed_time = 1.0/self.clock.get_fps()
+        #else: self.elapsed_time = 0.001
+
+
+def _generate_random_triangles(xmin,xmax,ymin,ymax,size,num,mass):
+    triangles = []
+    for i in range(num):
+        x = random.randint(xmin,xmax)
+        y = random.randint(ymin,ymax)        
+        t = Triangle(Vector2(x,y),Vector2(x+size,y),Vector2(x+size*0.5,y+size),mass)        
+        triangles.append(t)
+
+    return triangles
+
+def main():
+    x = y = 100
+    size = 30
+    
+    triangles = _generate_random_triangles(10,400,150,400,size,40,20)    
+    floor = Triangle(Vector2(50,100),Vector2(300,20),Vector2(500,100),100000)
+    
+    gravity = RigidGravity()
+    gravity.set_gravity(Vector2(0,-10))
+
+    drag = RigidDrag()
+    drag.set_drag(1,1)
+
+    rot_drag = RigidRotationDrag()
+    rot_drag.set_drag(1,1)
+            
+    graphics = MyGraphics(640,480)
+    graphics.set_window_title("DYNAMIC AABB DEMO")
+
+    graphics.append_triangle(floor)
+    for t in triangles:
+        gravity.append_obj(t)
+        drag.append_obj(t)
+        rot_drag.append_obj(t)
+        graphics.append_triangle(t)
+    
+    gravity_id = graphics.append_force(gravity)
+    drag_id =graphics.append_force(drag)
+    rot_drag_id =graphics.append_force(rot_drag)    
+    
+    """
+    t1 = Triangle(Vector2(x,y),Vector2(x+size,y),Vector2(x+size*0.5,y+size),1)
+    t2 = Triangle(Vector2(x,y),Vector2(x+size,y),Vector2(x+size*0.5,y+size),1)
+    t3 = Triangle(Vector2(50,100),Vector2(300,20),Vector2(500,100),100000)
+    
+    gravity = RigidGravity()
+    gravity.set_gravity(Vector2(0,-10))
+    gravity.append_obj(t1)
+    gravity.append_obj(t2)
+    #gravity.append_obj(t3)
+    
+    drag = RigidDrag()
+    drag.set_drag(1,2)
+    drag.append_obj(t1)
+    drag.append_obj(t2)
+    drag.append_obj(t3)
+
+    rot_drag = RigidRotationDrag()
+    rot_drag.set_drag(1,2)
+    rot_drag.append_obj(t1)
+    rot_drag.append_obj(t2)
+    rot_drag.append_obj(t3)
+    
+    graphics = MyGraphics(640,480)
+    graphics.set_window_title("DYNAMIC AABB DEMO")
+    
+    graphics.append_triangle(t1)
+    graphics.append_triangle(t2)
+    graphics.append_triangle(t3)
+    
+    gravity_id = graphics.append_force(gravity)
+    drag_id =graphics.append_force(drag)
+    rot_drag_id =graphics.append_force(rot_drag)
+    """
+    
+    graphics.init()    
+    graphics.run()
+    
+if __name__=='__main__':
+    main()

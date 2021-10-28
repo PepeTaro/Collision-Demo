@@ -51,10 +51,16 @@ class MyGraphics(Graphics):
         # 左右アローキーで、マウスで動かすオブジェクトを変更
         if self.holding_which_key == K_LEFT:            
             self.moving_obj_idx = (self.moving_obj_idx - 1)%len(self.nodes)
-
+            
         elif self.holding_which_key == K_RIGHT:
             self.moving_obj_idx = (self.moving_obj_idx + 1)%len(self.nodes)
-        
+            
+        elif self.holding_which_key == K_UP:
+            self.debug = True
+            
+        elif self.holding_which_key == K_DOWN:
+            self.debug = False
+            
     def holding_mouse_handler(self):
         if(not self.is_holding_mouse_button): return
 
@@ -80,19 +86,14 @@ class MyGraphics(Graphics):
         if(node == test_node): return # 自身とは衝突判定をしない
         
         if(node.is_leaf()): # AABB木の葉に達した場合(AABB木の定義により、葉にのみオブジェクトが保存されている)
-
-             # SAT(Separating Axis Theorem)テスト                                
-             #(delta,move_opposite_direction) = sat.test_sat_objs(test_node.body,node.body) # Narrow Phase段階の衝突判定
-            #sat.collision_response(test_node.body,delta,move_opposite_direction)    # Collision Response(めり込み解消)
-
-            #collision_data = sat4.sat_objs(test_node.body,node.body) # Narrow Phase段階の衝突判定                            
-            #sat4.collision_response(test_node.body,collision_data)    # Collision Response(めり込み解消)
+            
+            # SAT(Separating Axis Theorem)テスト
             
             (depth,normal,is_test_normal) = clip.sat(test_node.body,node.body)
             
             cp = None
             data = []
-
+            
             if(normal != None):                                
                 mass_weight = node.body.mass/(test_node.body.mass + node.body.mass)
                     
@@ -101,109 +102,81 @@ class MyGraphics(Graphics):
                 else:
                     moving_vector = normal*depth*mass_weight
                     
-                mat = Matrix3.Translate(moving_vector.x,moving_vector.y)      
-                test_node.body.update(mat)                
+                moving_mat = Matrix3.Translate(moving_vector.x,moving_vector.y)                      
+                test_node.body.update(moving_mat)                
                 
-            if(normal != None and is_test_normal):
+            #if(normal != None and is_test_normal):
+            if(normal != None):
                 cp = clip.get_contact_points(test_node.body,node.body,normal,data)
                 
-                """
-                theta1 = theta2 = 0.0                
-                if(cp.begin != None):
-                    r1 =  cp.begin - test_node.body.center
-                    if(is_test_normal):
-                        theta1 = Vector2.cross(r1,normal)*1e-5
-                    else:
-                        theta1 = Vector2.cross(r1,-normal)*1e-5
+                if(cp != None):
+                    """
+                    if(cp.begin != None):
+                        self.draw_circle(Color.RED,cp.begin,4)
+                    if(cp.end != None):
+                        self.draw_circle(Color.RED,cp.end,4)                                        
+                    """
+                    
+                    # 重力によるトルク
+                    s = None
+
+                    #print(test_node.body,depth)
+                    #if(depth < 1e-1): return                    # めり込みが浅い場合は回転しない
+                    if(cp.begin == None and cp.end == None): return # Contact Pointがない場合
+
+                    # 以下のelifは,質量中心からContact Pointへのベクトルを求めるコード
+                    elif(cp.begin != None and cp.end != None): # Contact Pointが2つ存在する場合
+                        r =  ((cp.begin - test_node.body.center) + (cp.end - test_node.body.center))/2 # Contact Pointの平均
                         
-                if(cp.end != None):
-                    r2 =  cp.end - test_node.body.center
-                    
-                    if(is_test_normal):
-                        theta2 = Vector2.cross(r2,normal)*1e-5
-                    else:
-                        theta2 = Vector2.cross(r2,-normal)*1e-5
+                        s = (test_node.body.center - (cp.begin + cp.end)/2)
+                        s.normalize()
 
-                theta = theta1 + theta2
-                """
-                
-                if(normal != None and cp != None):
-                    if(depth < 1e-1): return
-
-                    if(self.debug):
-                        if(cp.begin != None):
-                            self.draw_circle(Color.RED,cp.begin,6)
-                        if(cp.end != None):
-                            self.draw_circle(Color.RED,cp.end,6)
-                    
-                    angle = 1e-3*depth
-
-                    if(cp.begin == None and cp.end == None):
-                        return
-                    
-                    elif(cp.begin != None and cp.end != None):
-                        r =  ((cp.begin - test_node.body.center) + (cp.end - test_node.body.center))/2
                     elif(cp.begin != None):
-                        r =  cp.begin - test_node.body.center                        
+                        r =  cp.begin - test_node.body.center
+                        #s = (max_p - cp.begin)
+                        s = (test_node.body.center - cp.begin)
+                        s.normalize()                        
+                        #self.draw_line(Color.RED,cp.begin,test_node.body.center,4)
+                        
                     elif(cp.end != None):
                         r =  cp.end - test_node.body.center
-                                        
-                    if(is_test_normal):
-                        theta = Vector2.cross(r,-normal)*angle*1.0/test_node.body.mass
-                        print("test_normal:",theta,depth)
+                        #s = (max_p - cp.end)
+                        s = (test_node.body.center - cp.end)
+                        s.normalize()
+                        #self.draw_line(Color.RED,cp.end,test_node.body.center,4)
+                        
+                    if(s != None):
+                        theta_grav = Vector2.cross(s,Vector2(0,-1))*1e-3*1.0/test_node.body.mass # TODO:質量は慣性モーメントに置き換え
+
+                    #print(test_node.body,depth,theta_grav)
+                    angle = 1e-3*depth
+                    
+                    if(is_test_normal): # test_node.bodyの法線ベクトルがSeparation Vectorの場合                        
+                        theta = Vector2.cross(r,-normal)*angle*1.0/test_node.body.mass # TODO:質量は慣性モーメントに置き換え
                         trans_mat = Matrix3.Translate(-test_node.body.center.x,-test_node.body.center.y)
-                        rot_mat = Matrix3.Rotate(theta)
+                        
+                        if(s != None):
+                            rot_mat = Matrix3.Rotate(theta + theta_grav)
+                        else:
+                            rot_mat = Matrix3.Rotate(theta)
+                            
                         inv_trans_mat = Matrix3.Translate(test_node.body.center.x,test_node.body.center.y)                        
                         mat = inv_trans_mat*rot_mat*trans_mat                                        
                         test_node.body.update(mat)
                         
                     else:                        
                         theta = Vector2.cross(r,normal)*angle*1.0/test_node.body.mass
-                        print("not test_normal:",theta)
                         trans_mat = Matrix3.Translate(-test_node.body.center.x,-test_node.body.center.y)
-                        rot_mat = Matrix3.Rotate(theta)
+                        
+                        if(s != None):
+                            rot_mat = Matrix3.Rotate(theta + theta_grav)
+                        else:
+                            rot_mat = Matrix3.Rotate(theta)
+
                         inv_trans_mat = Matrix3.Translate(test_node.body.center.x,test_node.body.center.y)                        
                         mat = inv_trans_mat*rot_mat*trans_mat                                        
                         test_node.body.update(mat)                    
                 
-                """
-                if(normal != None and cp != None):                    
-                    if(cp.begin != None):
-                        self.draw_circle(Color.RED,cp.begin,6)
-                    if(cp.end != None):
-                        self.draw_circle(Color.RED,cp.end,6)
-                
-                if(cp.begin != None and cp.end != None):
-                    pass
-                elif(cp.begin == None and cp.end == None):
-                    pass
-                else:
-                    if(cp.begin != None):
-                        r =  cp.begin - test_node.body.center                        
-                    elif(cp.end != None):
-                        r =  cp.end - test_node.body.center
-
-                    angle = 1e-3
-                                        
-                    if(is_test_normal):
-                        theta = Vector2.cross(r,-normal)*angle*1.0/node.body.mass
-                        print("test_normal:",theta,depth)
-                        trans_mat = Matrix3.Translate(-node.body.center.x,-node.body.center.y)
-                        rot_mat = Matrix3.Rotate(theta)
-                        inv_trans_mat = Matrix3.Translate(node.body.center.x,node.body.center.y)                        
-                        mat = inv_trans_mat*rot_mat*trans_mat                                        
-                        node.body.update(mat)
-                        
-                    else:                        
-                        theta = Vector2.cross(r,normal)*angle*1.0/node.body.mass
-                        print("not test_normal:",theta)
-                        trans_mat = Matrix3.Translate(-node.body.center.x,-node.body.center.y)
-                        rot_mat = Matrix3.Rotate(theta)
-                        inv_trans_mat = Matrix3.Translate(node.body.center.x,node.body.center.y)                        
-                        mat = inv_trans_mat*rot_mat*trans_mat                                        
-                        node.body.update(mat)                    
-                
-                """
             if(debug): # 衝突の可能性があるオブジェクトを赤色で描写
                 """
                 self.draw_rect(Color.RED,test_node.box.lower,test_node.box.upper,2)
@@ -377,22 +350,21 @@ def main():
     t.is_static  = True
     nodes.append(Node(t,t.aabb))
     """
-    
-    #_append_circle_mesh_to_nodes(300,400,20,10,10,nodes)    
-    _append_random_triangle_to_nodes(10,400,100,400,30,30,1,nodes)
-    
+        
     t = Triangle(Vector2(20,100),Vector2(320,40),Vector2(600,100),100000)
     t.use_gravity = False
     t.is_static  = True
     nodes.append(Node(t,t.aabb))
-    
-    
+
+    #_append_circle_mesh_to_nodes(300,400,20,10,10,nodes)    
+    _append_random_triangle_to_nodes(10,400,100,400,30,30,1,nodes)
+        
     for node in nodes: # すべてのノードをAABB木に挿入
         tree.insert(tree.root,node)
     
     graphics = MyGraphics(640,480)
     graphics.set_window_title("DYNAMIC AABB DEMO")
-    #graphics.turn_on_debug()
+    graphics.turn_on_debug()
     
     graphics.set_tree(tree)
     graphics.set_nodes(nodes)

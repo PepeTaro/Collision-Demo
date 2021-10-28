@@ -80,7 +80,8 @@ def get_contact_points(t1,t2,n,data):
         ref = e1
         inc = e2        
     else:
-        print("FLIP!!")
+        #print("FLIP!!")
+        #print(abs(e1.dot(n)),abs(e2.dot(n)))
         ref = e2
         inc = e1
         is_flip = True

@@ -102,10 +102,15 @@ class Graphics:
     def run(self):
         self.running = True
         while self.running:
+            self.screen.fill(Color.WHITE)
+            
             self._event_handler()
             self._update()
             self._draw()
             self._timer()
+            
+            pygame.display.flip()
+            
         pygame.quit()
         
     def _calculate_cartesian_coordinate(self,vec):
@@ -138,9 +143,9 @@ class Graphics:
         self.update()
         
     def _draw(self):
-        self.screen.fill(Color.WHITE)
+        #self.screen.fill(Color.WHITE)
         self.draw()
-        pygame.display.flip()        
+        #pygame.display.flip()        
     
     def _timer(self):
         self.timer()
@@ -149,7 +154,7 @@ class Graphics:
         raise NotImplementedError('Error(draw):Override me!')
     def update(self):
         raise NotImplementedError('Error(update):Override me!')    
-    def timer(self):        
+    def timer(self):                
         pass
     
     def mouse_get_pos(self):
