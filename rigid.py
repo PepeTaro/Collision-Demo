@@ -61,7 +61,7 @@ class Object:
         self.translation = None
         self.rotation = None
         
-    def integral(self,delta_time):
+    def integrate(self,delta_time):
         assert(delta_time > 0.0)
         
         accum_acc = self.inv_mass*self.force #合力による加速度追加
@@ -95,10 +95,16 @@ class Object:
 
     def add_torque(self,torque):
         self.torque += torque
-
+        
     def add_force_at_point(self,pos,force):
         self.force  += force
         self.torque += Vector2.cross((pos-self.center),force)
+
+    def add_vel_impulse(self,impulse):
+        self.vel += impulse*self.inv_mass
+
+    def add_ang_impulse(self,vector,impulse):
+        self.ang_vel += Vector2.cross(vector,impulse)*self.inv_moment_of_inertia
         
     def has_mass(self):
         return (self.mass > 0)
@@ -116,7 +122,7 @@ class Triangle(Object):
         
     def update(self,delta_time):
         assert(delta_time > 0.0)        
-        super().integral(delta_time)
+        super().integrate(delta_time)
         
         to_origin = Matrix3.Translate(-self.center.x,-self.center.y)
         inv_to_origin = Matrix3.Translate(self.center.x,self.center.y)

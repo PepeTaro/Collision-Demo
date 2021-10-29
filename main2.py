@@ -103,17 +103,47 @@ class MyGraphics(Graphics):
                 #t1.transform(mat,True)
                 
                 weight1 = t2.mass/(t1.mass + t2.mass)
-                weight2 = t1.mass/(t1.mass + t2.mass)
+                weight2 = t1.mass/(t1.mass + t2.mass)                
+                e = 0.001                
+                #weight1 = t1.inv_mass
+                #weight2 = t2.inv_mass                
                 mat1 = Matrix3.Translate(-depth*weight1*normal.x,-depth*weight1*normal.y)
                 mat2 = Matrix3.Translate(depth*weight2*normal.x,depth*weight2*normal.y)                    
                 t1.transform(mat1,True)
-                t2.transform(mat2,True)
-                    
+                t2.transform(mat2,True)                
+                
+                """
+                weight1 = t2.mass/(t1.mass + t2.mass)
+                weight2 = t1.mass/(t1.mass + t2.mass)
+                #t1.vel += -depth*normal*t1.inv_mass
+                #t2.vel += depth*normal*t2.inv_mass
+                
+                closing_vel = Vector2.dot((t1.vel - t2.vel),normal)
+                new_closing_vel = -closing_vel
+                delta_vel = new_closing_vel - closing_vel
+                
+                impulse = delta_vel*weight1
+                impulse_per_mass = impulse*normal
+                t1.vel += impulse_per_mass*depth
+                
+                impulse = delta_vel*weight2
+                impulse_per_mass = impulse*normal
+                t2.vel -= impulse_per_mass*depth
+                """
+                
+                """
+                t1.add_vel_impulse(-depth*normal)
+                t2.add_vel_impulse(depth*normal)
+                """
                 if(cp.begin != None):
                     #t1.add_force_at_point(cp.begin,-normal*weight*depth*0.01)
-                    t1.add_force_at_point(cp.begin,-normal*weight1*depth*0.01)
-                    t2.add_force_at_point(cp.begin,normal*weight2*depth*0.01)
-
+                    #t1.add_force_at_point(cp.begin,-normal*weight1*depth*0.01)
+                    #t2.add_force_at_point(cp.begin,normal*weight2*depth*0.01)
+                    #t1.ang_vel += e*Vector2.cross((cp.begin - t1.center),-depth*normal)*t1.inv_moment_of_inertia
+                    #t2.ang_vel += e*Vector2.cross((cp.begin - t2.center),depth*normal)*t2.inv_moment_of_inertia
+                    t1.add_ang_impulse((cp.begin - t1.center),-e*depth*normal)
+                    t2.add_ang_impulse((cp.begin - t2.center),e*depth*normal)
+                    
                     if(self.debug):
                         self.draw_circle(Color.RED,cp.begin,5)
                         self.draw_line(Color.YELLOW,t1.center,cp.begin,3)
@@ -123,9 +153,13 @@ class MyGraphics(Graphics):
                     
                 if(cp.end != None):
                     #t1.add_force_at_point(cp.end,-normal*weight*depth*0.01)
-                    t1.add_force_at_point(cp.end,-normal*weight1*depth*0.01)
-                    t2.add_force_at_point(cp.end,normal*weight2*depth*0.01)
-
+                    #t1.add_force_at_point(cp.end,-normal*weight1*depth*0.01)
+                    #t2.add_force_at_point(cp.end,normal*weight2*depth*0.01)
+                    #t1.ang_vel += e*Vector2.cross((cp.end - t1.center),-depth*normal)*t1.inv_moment_of_inertia
+                    #t2.ang_vel += e*Vector2.cross((cp.end - t2.center),depth*normal)*t2.inv_moment_of_inertia
+                    t1.add_ang_impulse((cp.end - t1.center),-e*depth*normal)
+                    t2.add_ang_impulse((cp.end - t2.center),e*depth*normal)
+                    
                     if(self.debug):
                         self.draw_circle(Color.RED,cp.end,5)
                         self.draw_line(Color.YELLOW,t1.center,cp.end,3)
@@ -134,11 +168,13 @@ class MyGraphics(Graphics):
                         self.draw_circle(Color.MAGENTA,t1.center,5)
                     
     def update(self):
-        delta = 0.1
+        delta = 0.3
         for force in self.forces:
             for obj in force.objs:
                 force.update_force(obj,delta)
-                obj.update(delta)
+
+        for obj in self.triangles:
+            obj.update(delta)
 
         for t1 in self.triangles:
             for t2 in self.triangles:                
@@ -185,12 +221,12 @@ class MyGraphics(Graphics):
         #else: self.elapsed_time = 0.001
 
 
-def _generate_random_triangles(xmin,xmax,ymin,ymax,size,num,mass):
+def _generate_random_triangles(xmin,xmax,ymin,ymax,size,num,mass,moment_of_inertia):
     triangles = []
     for i in range(num):
         x = random.randint(xmin,xmax)
         y = random.randint(ymin,ymax)        
-        t = Triangle(Vector2(x,y),Vector2(x+size,y),Vector2(x+size*0.5,y+size),mass)        
+        t = Triangle(Vector2(x,y),Vector2(x+size,y),Vector2(x+size*0.5,y+size),mass,moment_of_inertia)        
         triangles.append(t)
 
     return triangles
@@ -199,8 +235,8 @@ def main():
     x = y = 100
     size = 30
     
-    triangles = _generate_random_triangles(10,400,150,400,size,40,20)    
-    floor = Triangle(Vector2(50,100),Vector2(300,20),Vector2(500,100),100000)
+    triangles = _generate_random_triangles(10,400,150,400,size,20,1,10)    
+    floor = Triangle(Vector2(50,100),Vector2(300,20),Vector2(500,100),100000,10000000)
     
     gravity = RigidGravity()
     gravity.set_gravity(Vector2(0,-10))
@@ -224,41 +260,6 @@ def main():
     gravity_id = graphics.append_force(gravity)
     drag_id =graphics.append_force(drag)
     rot_drag_id =graphics.append_force(rot_drag)    
-    
-    """
-    t1 = Triangle(Vector2(x,y),Vector2(x+size,y),Vector2(x+size*0.5,y+size),1)
-    t2 = Triangle(Vector2(x,y),Vector2(x+size,y),Vector2(x+size*0.5,y+size),1)
-    t3 = Triangle(Vector2(50,100),Vector2(300,20),Vector2(500,100),100000)
-    
-    gravity = RigidGravity()
-    gravity.set_gravity(Vector2(0,-10))
-    gravity.append_obj(t1)
-    gravity.append_obj(t2)
-    #gravity.append_obj(t3)
-    
-    drag = RigidDrag()
-    drag.set_drag(1,2)
-    drag.append_obj(t1)
-    drag.append_obj(t2)
-    drag.append_obj(t3)
-
-    rot_drag = RigidRotationDrag()
-    rot_drag.set_drag(1,2)
-    rot_drag.append_obj(t1)
-    rot_drag.append_obj(t2)
-    rot_drag.append_obj(t3)
-    
-    graphics = MyGraphics(640,480)
-    graphics.set_window_title("DYNAMIC AABB DEMO")
-    
-    graphics.append_triangle(t1)
-    graphics.append_triangle(t2)
-    graphics.append_triangle(t3)
-    
-    gravity_id = graphics.append_force(gravity)
-    drag_id =graphics.append_force(drag)
-    rot_drag_id =graphics.append_force(rot_drag)
-    """
     
     graphics.init()    
     graphics.run()
