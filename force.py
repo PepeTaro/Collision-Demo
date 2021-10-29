@@ -18,7 +18,7 @@ class RigidGravity(ForceRegistry):
         self.gravity = gravity
 
     def update_force(self,rigid,delta_time):
-        if(not rigid.has_mass()): return
+        if(not rigid.has_finite_mass()): return
         rigid.add_force(self.gravity*rigid.mass)
         
 class RigidDrag(ForceRegistry):

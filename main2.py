@@ -28,7 +28,7 @@ class MyGraphics(Graphics):
         super().__init__(width,height)
         self.triangles = []
         self.forces    = []
-        self.elapsed_time = 0.0
+        self.elapsed_time = 0.01
         self.prev_pos = None
         self.delta = None
         self.debug = False
@@ -58,10 +58,10 @@ class MyGraphics(Graphics):
         delta_angle = 2.0
         # 左右アローキーで、マウスで動かすオブジェクトを変更
         if self.holding_which_key == K_LEFT:
-            self.triangles[1].add_torque(delta_angle)
+            self.triangles[0].add_torque(delta_angle)
             pass            
         elif self.holding_which_key == K_RIGHT:
-            self.triangles[1].add_torque(-delta_angle)
+            self.triangles[0].add_torque(-delta_angle)
             pass            
         elif self.holding_which_key == K_UP:
             self.debug = True
@@ -78,11 +78,16 @@ class MyGraphics(Graphics):
         # 以前のマウスの位置と現在のマウスの位置の"差"を求め、そのベクトル分オブジェクトを動かく
         self.delta = (pos - self.prev_pos)
         
-        mat = Matrix3.Translate(self.delta.x,self.delta.y)
-        self.triangles[1].transform(mat,True)
-                
-        self.prev_pos = pos # 以前の位置を更新
+        #mat = Matrix3.Translate(self.delta.x,self.delta.y)
+        #self.triangles[1].transform(mat,True)
+        self.triangles[0].add_vel_impulse(self.delta*100)
         
+        self.prev_pos = pos # 以前の位置を更新
+
+        if(self.debug and self.prev_pos != None):
+            self.draw_circle(Color.RED,self.prev_pos,4)
+            self.draw_line(Color.RED,self.prev_pos,self.prev_pos + self.delta*10,4)
+
     def mouse_button_up_handler(self):
         self.prev_pos = None # マウスボタンを離したら、以前の位置をリセット
 
@@ -92,58 +97,72 @@ class MyGraphics(Graphics):
         cp = None
         data = []        
         if(normal != None):
-            cp = clip.get_contact_points(t1,t2,normal,data)            
+            cp = clip.get_contact_points(t1,t2,normal,data) 
             if(cp != None and is_t2_incident):
                 
                 if(self.debug):
                     self.draw_line(Color.GREEN,data[0].begin,data[0].end,5)
                     self.draw_line(Color.BLUE,data[1].begin,data[1].end,5)
-                
-                #mat = Matrix3.Translate(-depth*weight*normal.x,-depth*weight*normal.y)
-                #t1.transform(mat,True)
-                
+                    
+                """
                 weight1 = t2.mass/(t1.mass + t2.mass)
                 weight2 = t1.mass/(t1.mass + t2.mass)                
-                e = 0.001                
-                #weight1 = t1.inv_mass
-                #weight2 = t2.inv_mass                
+                                
+                mat1 = Matrix3.Translate(-depth*weight1*normal.x,-depth*weight1*normal.y)
+                mat2 = Matrix3.Translate(depth*weight2*normal.x,depth*weight2*normal.y)                    
+                t1.transform(mat1,True)
+                t2.transform(mat2,True)                
+
+                e = 0.01                
+                restituon = 0.1
+                separation_vel = Vector2.dot((t1.vel - t2.vel),normal)
+                
+                if(separation_vel > 0.0):
+                    new_separation_vel = -separation_vel*restituon
+                    delta_vel = new_separation_vel - separation_vel
+                    
+                    t1.vel += delta_vel*weight1*normal
+                    t2.vel -= delta_vel*weight2*normal
+
+                """
+                
+                weight = weight1 = weight2 = 0.0
+                if(t1.has_finite_mass()): weight += t1.inv_mass
+                if(t2.has_finite_mass()): weight += t2.inv_mass
+                if(weight == 0.0): return
+                
+                if(t1.has_finite_mass()): weight1 = t1.inv_mass/weight
+                if(t2.has_finite_mass()): weight2 = t2.inv_mass/weight
+                
                 mat1 = Matrix3.Translate(-depth*weight1*normal.x,-depth*weight1*normal.y)
                 mat2 = Matrix3.Translate(depth*weight2*normal.x,depth*weight2*normal.y)                    
                 t1.transform(mat1,True)
                 t2.transform(mat2,True)                
                 
-                """
-                weight1 = t2.mass/(t1.mass + t2.mass)
-                weight2 = t1.mass/(t1.mass + t2.mass)
-                #t1.vel += -depth*normal*t1.inv_mass
-                #t2.vel += depth*normal*t2.inv_mass
+                print(t1.mass,Vector2.norm(t1.vel),t2.mass,Vector2.norm(t2.vel),depth)
                 
-                closing_vel = Vector2.dot((t1.vel - t2.vel),normal)
-                new_closing_vel = -closing_vel
-                delta_vel = new_closing_vel - closing_vel
+                e = 0.01                
+                restituon = 0.0
+                separation_vel = Vector2.dot((t1.vel - t2.vel),normal)
                 
-                impulse = delta_vel*weight1
-                impulse_per_mass = impulse*normal
-                t1.vel += impulse_per_mass*depth
-                
-                impulse = delta_vel*weight2
-                impulse_per_mass = impulse*normal
-                t2.vel -= impulse_per_mass*depth
-                """
-                
-                """
-                t1.add_vel_impulse(-depth*normal)
-                t2.add_vel_impulse(depth*normal)
-                """
+                if(separation_vel > 0.0):
+                    new_separation_vel = -separation_vel*restituon
+                    delta_vel = new_separation_vel - separation_vel
+                    
+                    if(t1.has_finite_mass()): t1.vel += delta_vel*weight1*normal
+                    if(t2.has_finite_mass()): t2.vel -= delta_vel*weight2*normal
+                    
                 if(cp.begin != None):
                     #t1.add_force_at_point(cp.begin,-normal*weight*depth*0.01)
                     #t1.add_force_at_point(cp.begin,-normal*weight1*depth*0.01)
                     #t2.add_force_at_point(cp.begin,normal*weight2*depth*0.01)
                     #t1.ang_vel += e*Vector2.cross((cp.begin - t1.center),-depth*normal)*t1.inv_moment_of_inertia
                     #t2.ang_vel += e*Vector2.cross((cp.begin - t2.center),depth*normal)*t2.inv_moment_of_inertia
-                    t1.add_ang_impulse((cp.begin - t1.center),-e*depth*normal)
-                    t2.add_ang_impulse((cp.begin - t2.center),e*depth*normal)
-                    
+                    #t1.add_ang_impulse((cp.begin - t1.center),-e*depth*normal)
+                    #t2.add_ang_impulse((cp.begin - t2.center),e*depth*normal)
+                    if(t1.has_finite_moment_of_inertia()): t1.add_ang_impulse((cp.begin - t1.center),-e*normal)
+                    if(t2.has_finite_moment_of_inertia()):t2.add_ang_impulse((cp.begin - t2.center),e*normal)
+
                     if(self.debug):
                         self.draw_circle(Color.RED,cp.begin,5)
                         self.draw_line(Color.YELLOW,t1.center,cp.begin,3)
@@ -157,18 +176,22 @@ class MyGraphics(Graphics):
                     #t2.add_force_at_point(cp.end,normal*weight2*depth*0.01)
                     #t1.ang_vel += e*Vector2.cross((cp.end - t1.center),-depth*normal)*t1.inv_moment_of_inertia
                     #t2.ang_vel += e*Vector2.cross((cp.end - t2.center),depth*normal)*t2.inv_moment_of_inertia
-                    t1.add_ang_impulse((cp.end - t1.center),-e*depth*normal)
-                    t2.add_ang_impulse((cp.end - t2.center),e*depth*normal)
-                    
+                    #t1.add_ang_impulse((cp.end - t1.center),-e*depth*normal)
+                    #t2.add_ang_impulse((cp.end - t2.center),e*depth*normal)
+                    if(t1.has_finite_moment_of_inertia()): t1.add_ang_impulse((cp.end - t1.center),-e*normal)
+                    if(t2.has_finite_moment_of_inertia()): t2.add_ang_impulse((cp.end - t2.center),e*normal)
+
                     if(self.debug):
                         self.draw_circle(Color.RED,cp.end,5)
                         self.draw_line(Color.YELLOW,t1.center,cp.end,3)
                         self.draw_line(Color.CYAN,t1.center,t1.center - normal*30,3)
                         self.draw_line(Color.CYAN,cp.end,cp.end - normal*30,3)                    
                         self.draw_circle(Color.MAGENTA,t1.center,5)
-                    
+
     def update(self):
-        delta = 0.3
+        #delta = 0.3
+        #print(self.elapsed_time)
+        delta = self.elapsed_time
         for force in self.forces:
             for obj in force.objs:
                 force.update_force(obj,delta)
@@ -189,15 +212,7 @@ class MyGraphics(Graphics):
             half = (t.vecs[i%3] + t.vecs[(i+1)%3])/2
             self.draw_line(Color.BLACK,half,half + t.normals[i]*10)
 
-    def draw(self):
-        if(self.prev_pos != None):
-            self.draw_circle(Color.RED,self.prev_pos,4)
-            self.draw_line(Color.RED,self.prev_pos,self.prev_pos + self.delta*10,4)
-            if(point_in_triangle(self.prev_pos,self.triangles[0])):
-                pass
-                #mat = Matrix3.Translate(self.delta.x,self.delta.y)
-                #self.triangles[0].transform(mat,True)
-                
+    def draw(self):                            
         for t in self.triangles:
             self.draw_triangle(Color.BLACK,t)
             if(self.debug): self.draw_debug(t)
@@ -214,12 +229,10 @@ class MyGraphics(Graphics):
         return len(self.forces) - 1
 
     def timer(self):
-        pass
-        #self.clock.tick()
-        #fps = self.clock.get_fps()
-        #if(fps != 0): self.elapsed_time = 1.0/self.clock.get_fps()
-        #else: self.elapsed_time = 0.001
-
+        self.clock.tick()
+        fps = self.clock.get_fps()
+        if(fps != 0): self.elapsed_time = 1.0/self.clock.get_fps()
+        else: self.elapsed_time = 0.01
 
 def _generate_random_triangles(xmin,xmax,ymin,ymax,size,num,mass,moment_of_inertia):
     triangles = []
@@ -232,17 +245,19 @@ def _generate_random_triangles(xmin,xmax,ymin,ymax,size,num,mass,moment_of_inert
     return triangles
 
 def main():
-    x = y = 100
-    size = 30
-    
-    triangles = _generate_random_triangles(10,400,150,400,size,20,1,10)    
-    floor = Triangle(Vector2(50,100),Vector2(300,20),Vector2(500,100),100000,10000000)
+
+    size = 30    
+    triangles = _generate_random_triangles(50,400,150,400,size,50,10,1)
+    sweep = Triangle(Vector2(100,200),Vector2(150,100),Vector2(200,200),100,1)
+    floor = Triangle(Vector2(50,100),Vector2(300,20),Vector2(500,100),-1,-1)
+    left_wall = Triangle(Vector2(50,100),Vector2(50,400),Vector2(0,200),-1,-1)
+    right_wall = Triangle(Vector2(500,100),Vector2(550,200),Vector2(500,400),-1,-1)
     
     gravity = RigidGravity()
-    gravity.set_gravity(Vector2(0,-10))
+    gravity.set_gravity(Vector2(0,-100))
 
     drag = RigidDrag()
-    drag.set_drag(1,1)
+    drag.set_drag(0,0.1)
 
     rot_drag = RigidRotationDrag()
     rot_drag.set_drag(1,1)
@@ -250,7 +265,14 @@ def main():
     graphics = MyGraphics(640,480)
     graphics.set_window_title("DYNAMIC AABB DEMO")
 
+    graphics.append_triangle(sweep)    
     graphics.append_triangle(floor)
+    graphics.append_triangle(right_wall)
+    graphics.append_triangle(left_wall)
+
+    gravity.append_obj(sweep)
+    rot_drag.append_obj(sweep)
+    
     for t in triangles:
         gravity.append_obj(t)
         drag.append_obj(t)

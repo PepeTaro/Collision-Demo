@@ -49,10 +49,10 @@ class Object:
         self.ang = ang # オブジェクトの向き(x軸から半時計回り)
         self.ang_vel = ang_vel # 角速度
 
-        self.mass = mass # 質量
+        self.mass = mass # 質量            
         self.inv_mass = 1.0/self.mass # 質量の逆数
 
-        self.moment_of_inertia = moment_of_inertia # 慣性モーメント
+        self.moment_of_inertia = moment_of_inertia # 慣性モーメント            
         self.inv_moment_of_inertia = 1.0/moment_of_inertia # 慣性モーメントの逆数
 
         self.force = Vector2(0,0) # 合力
@@ -63,12 +63,12 @@ class Object:
         
     def integrate(self,delta_time):
         assert(delta_time > 0.0)
-        
+
         accum_acc = self.inv_mass*self.force #合力による加速度追加
         delta_pos = (self.vel + 0.5*delta_time*accum_acc)*delta_time 
         self.center +=  delta_pos #位置を更新        
         self.vel += accum_acc*delta_time #速度更新
-
+        
         accum_ang_acc = self.inv_moment_of_inertia*self.torque
         delta_ang = (self.ang_vel + 0.5*delta_time*accum_ang_acc)*delta_time
         self.ang +=  delta_ang #角度を更新
@@ -101,14 +101,19 @@ class Object:
         self.torque += Vector2.cross((pos-self.center),force)
 
     def add_vel_impulse(self,impulse):
+        assert(self.has_finite_mass())
         self.vel += impulse*self.inv_mass
-
+    
     def add_ang_impulse(self,vector,impulse):
+        assert(self.has_finite_moment_of_inertia())
         self.ang_vel += Vector2.cross(vector,impulse)*self.inv_moment_of_inertia
-        
-    def has_mass(self):
-        return (self.mass > 0)
 
+    def has_finite_mass(self):
+        return (self.mass > 0.0)
+
+    def has_finite_moment_of_inertia(self):
+        return (self.moment_of_inertia > 0.0)
+    
 class Triangle(Object):
     def __init__(self,vec1,vec2,vec3,mass=1.0,moment_of_inertia=1.0):
         self.center = (vec1 + vec2 + vec3)/3 # 質量中心を計算        
@@ -121,7 +126,10 @@ class Triangle(Object):
         super().__init__(center=self.center,vel=Vector2(0,0),ang=0.0,ang_vel=0.0,mass=mass,moment_of_inertia=moment_of_inertia)
         
     def update(self,delta_time):
-        assert(delta_time > 0.0)        
+        assert(delta_time > 0.0)
+           
+        if(not self.has_finite_mass): return
+           
         super().integrate(delta_time)
         
         to_origin = Matrix3.Translate(-self.center.x,-self.center.y)
