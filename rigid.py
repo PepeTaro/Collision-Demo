@@ -53,22 +53,24 @@ class Object:
         self.inv_mass = 1.0/self.mass # 質量の逆数
 
         self.moment_of_inertia = moment_of_inertia # 慣性モーメント            
-        self.inv_moment_of_inertia = 1.0/moment_of_inertia # 慣性モーメントの逆数
+        self.inv_moment_of_inertia = 1.0/self.moment_of_inertia # 慣性モーメントの逆数
 
         self.force = Vector2(0,0) # 合力
         self.torque = 0.0 # トルク
 
         self.translation = None
         self.rotation = None
+
+        self.sleep = False
         
     def integrate(self,delta_time):
         assert(delta_time > 0.0)
-
+        
         accum_acc = self.inv_mass*self.force #合力による加速度追加
         delta_pos = (self.vel + 0.5*delta_time*accum_acc)*delta_time 
         self.center +=  delta_pos #位置を更新        
         self.vel += accum_acc*delta_time #速度更新
-        
+                
         accum_ang_acc = self.inv_moment_of_inertia*self.torque
         delta_ang = (self.ang_vel + 0.5*delta_time*accum_ang_acc)*delta_time
         self.ang +=  delta_ang #角度を更新
